@@ -19,7 +19,7 @@ cd e:/source/repos/chat-server-microservices
 docker-compose up -d
 ```
 *Lưu ý: Mở Docker Desktop trước khi chạy lệnh này. Bạn có thể dùng lệnh `docker-compose ps` để kiểm tra xem các container đã chạy thành công hay chưa.*
-
+test tử cái trigger Jenkins
 ## 3. Build và Khởi chạy Microservices
 
 ### 3.1. Cài đặt Common-Lib
