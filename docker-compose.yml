@@ -281,7 +281,6 @@ services:
       - sonarqube_data:/opt/sonarqube/data
       - sonarqube_extensions:/opt/sonarqube/extensions
       - sonarqube_logs:/opt/sonarqube/logs
-      -
   prometheus:
     image: prom/prometheus:latest
     container_name: system-prometheus
@@ -310,3 +309,4 @@ volumes:
   sonarqube_data:
   sonarqube_extensions:
   sonarqube_logs:
+  grafana_data:
