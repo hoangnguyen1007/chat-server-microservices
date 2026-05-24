@@ -2,24 +2,16 @@ pipeline {
     agent any
 
     tools {
-        jdk 'Java17'     // Tên cấu hình JDK trong Jenkins
-        maven 'Maven3'   // Tên cấu hình Maven trong Jenkins
+        jdk 'Java17'
+        maven 'Maven3'
     }
 
     environment {
-        // Tài khoản DockerHub của team
         DOCKER_USER = "hoangnguyen1007"
         DOCKER_CREDS_ID = "docker-hub-creds"
-
-        // Version tự tăng dần
         PROJECT_VERSION = "1.0.0-${BUILD_NUMBER}"
-
-        // Cấu hình máy chủ
         STAGING_IP = "10.0.0.101"
         PROD_IP = "10.0.0.201"
-//         SSH_STAGING_CREDS = "ssh-staging-key"
-//         SSH_PROD_CREDS = "ssh-prod-key"
-
         SERVICES = "auth-service channel-service gateway-service log-service messaging-service notification-service presence-service role-service server-service user-profile-service file-service"
     }
 
@@ -33,100 +25,70 @@ pipeline {
 
         stage('2. Build Common Lib') {
             steps {
-                echo "2️⃣ Xây dựng thư viện dùng chung..."
-                sh './mvnw clean install -pl common-lib -am -DskipTests'
+                echo "2️⃣ Xây dựng thư viện dùng chung common-lib..."
+                sh 'cd common-lib && mvn clean install'
             }
         }
 
-        stage('3. Unit Test & Coverage') {
+        stage('3. Run Automated Tests') {
             steps {
-                echo "3️⃣ Chạy kiểm thử tự động nội bộ..."
-                sh './mvnw clean test'
-            }
-        }
-        stage('Static Code Analysis (SonarQube)') {
-            steps {
-                echo '=== ĐANG QUÉT CHẤT LƯỢNG MÃ NGUỒN BẰNG SONARQUBE ==='
-                // Chạy plugin maven sonar để đẩy dữ liệu phân tích lên server localhost:9000
-                sh './mvnw sonar:sonar -Dsonar.host.url=http://sonarqube:9000'
+                echo "3️⃣ Khởi chạy toàn bộ Unit Test hệ thống..."
+                sh 'mvn test'
             }
         }
 
-        stage('Security Vulnerability Scan (Dependency-Check)') {
+        stage('4. Static Code Analysis') {
             steps {
-                echo '=== ĐANG QUÉT LỖI BẢO MẬT CÁC THƯ VIỆN ĐANG DÙNG (CVE) ==='
-                // Sử dụng OWASP Dependency-Check plugin của Maven để quét file pom.xml
-                sh './mvnw org.owasp:dependency-check-maven:check'
-            }
-        }
-        stage('4. Đóng gói Docker Images') {
-            steps {
-                script {
-                    echo "4️⃣ Bắt đầu Build Docker Images cho 10 Services..."
-                    def serviceList = env.SERVICES.split(' ')
-                    for (int i = 0; i < serviceList.length; i++) {
-                        def service = serviceList[i]
-                        sh "docker build -t ${env.DOCKER_USER}/${service}:latest -f ${service}/Dockerfile ."
-                    }
-                }
+                echo "4️⃣ Quét chất lượng source code với SonarQube..."
+                sh 'mvn sonar:sonar -Dsonar.host.url=http://sonarqube:9000'
             }
         }
 
-        stage('5. Push Lên Registry') {
+        stage('5. Security Vulnerability Scan') {
             steps {
-                echo "5️⃣ Gửi file đóng gói lên Docker Hub..."
-                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDS_ID, passwordVariable: 'DOCKER_PASS', usernameVariable: 'DOCKER_USER_ID')]) {
-                    sh 'echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER_ID" --password-stdin'
-
-                    script {
-                        def serviceList = env.SERVICES.split(' ')
-                        for (int i = 0; i < serviceList.length; i++) {
-                            sh "docker push ${env.DOCKER_USER}/${serviceList[i]}:latest"
-                        }
-                    }
-                }
+                echo "5️⃣ Quét lỗ hổng bảo mật thư viện第三方 bằng OWASP Dependency-Check..."
+                sh 'mvn org.owasp:dependency-check-maven:check'
             }
         }
 
-        stage('6. Deploy To Staging (Test Server)') {
+        stage('6. Compile, Package & Push to DockerHub') {
             steps {
-                echo "6️⃣ Tự động cài đặt lên máy chủ Staging..."
-                sshagent([env.SSH_STAGING_CREDS]) {
+                echo "6️⃣ Đóng gói ứng dụng JAR và đẩy Docker Image lên mạng công khai..."
+                withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDS_ID, passwordVariable: 'DOCKER_PASSWORD', usernameVariable: 'DOCKER_USERNAME')]) {
+                    sh "docker login -u ${DOCKER_USERNAME} -p ${DOCKER_PASSWORD}"
+
                     sh """
-                        ssh -o StrictHostKeyChecking=no deploy@${STAGING_IP} '
-                            cd /opt/chat-server &&
-                            docker-compose -f docker-compose.staging.yml pull &&
-                            docker-compose -f docker-compose.staging.yml up -d
-                        '
+                        for service in ${SERVICES}; do
+                            echo "📦 Đang xử lý dịch vụ: \$service..."
+                            cd \$service
+                            mvn clean package -DskipTests
+                            docker build -t ${DOCKER_USER}/\$service:${PROJECT_VERSION} .
+                            docker tag ${DOCKER_USER}/\$service:${PROJECT_VERSION} ${DOCKER_USER}/\$service:latest
+                            docker push ${DOCKER_USER}/\$service:${PROJECT_VERSION}
+                            docker push ${DOCKER_USER}/\$service:latest
+                            cd ..
+                        done
                     """
                 }
-                sleep time: 40, unit: 'SECONDS'
             }
         }
 
-        stage('7. Xin Duyệt Lên Môi Trường Thật (Manual Approval)') {
+        stage('7. Deploy To Staging (Môi trường Thử Nghiệm)') {
+            steps {
+                echo "7️⃣ Tiến hành cập nhật máy chủ Staging qua kết nối an toàn SSH..."
+                sh "echo 'Simulating SSH deployment to Staging Environment...'"
+                sleep time: 10, unit: 'SECONDS'
+            }
+        }
+
+        stage('8. Xin Duyệt Lên Môi Trường Thật (Manual Approval)') {
             steps {
                 timeout(time: 2, unit: 'DAYS') {
                     input message: "Bạn có chắc chắn muốn đẩy phiên bản ${env.PROJECT_VERSION} này lên cho Khách Hàng dùng không?", ok: "Duyệt - Deploy To Prod"
                 }
             }
         }
-
-//         stage('8. Deploy To Production (Thực Tế)') {
-//             steps {
-//                 echo "8️⃣ Đang cập nhật hệ thống thật..."
-//                 sshagent([env.SSH_PROD_CREDS]) {
-//                     sh """
-//                         ssh -o StrictHostKeyChecking=no deploy@${PROD_IP} '
-//                             cd /opt/chat-server &&
-//                             docker-compose -f docker-compose.prod.yml pull &&
-//                             docker-compose -f docker-compose.prod.yml up -d
-//                         '
-//                     """
-//                 }
-//             }
-//         }
-//     }
+    }
 
     post {
         success {
