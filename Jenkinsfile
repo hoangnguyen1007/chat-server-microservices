@@ -40,7 +40,7 @@ pipeline {
         stage('4. Static Code Analysis') {
             steps {
                 echo "4️⃣ Quét chất lượng source code với SonarQube..."
-                sh 'mvn sonar:sonar -Dsonar.host.url=http://sonarqube:9002'
+                sh 'mvn sonar:sonar -Dsonar.host.url=http://host.docker.internal:9002'
             }
         }
 
