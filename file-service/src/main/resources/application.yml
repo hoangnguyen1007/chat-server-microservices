@@ -38,9 +38,11 @@ minio:
     files: chat-files                  # Bucket chứa file gốc
     thumbnails: chat-thumbnails        # Bucket chứa ảnh thu nhỏ (thumbnail)
 
-# --- Actuator: expose endpoint health check ---
 management:
   endpoints:
     web:
       exposure:
-        include: health,info           # Chỉ mở health và info
+        include: health,info,prometheus, health
+    metrics:
+      tags:
+        application: ${spring.application.name}

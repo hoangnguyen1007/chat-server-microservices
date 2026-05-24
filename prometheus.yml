@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'spring-boot-microservices'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['auth-service:8081', 'server-service:8085', 'gateway-service:8080', 'channel-service:8086', 'file-service:8089', 'log-service:8084', 'messaging-service:8082', 'notification-service:8088', 'presence-service:8083', 'role-service:8091', 'user-profile-service:8090']
+        # Điền chính xác tên service và port nội bộ trong mạng Docker của ông vào đây

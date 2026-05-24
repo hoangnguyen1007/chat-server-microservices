@@ -111,7 +111,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,info,prometheus, health
   endpoint:
     health:
       show-details: always
+    metrics:
+      tags:
+        application: ${spring.application.name}
